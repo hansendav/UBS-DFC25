@@ -18,7 +18,7 @@ from tqdm import tqdm
 # own codebase 
 sys.path.append('/home/gentleprotector/ubs_ws24/UBS-DFC25/codebase')
 import unetbase
-from unetbase import UNetPlusLoc
+from unetbase import UNet
 import data_loader
 from utils import ce_per_class
 
@@ -44,7 +44,7 @@ class Trainer(object):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         # setup model from custom script and send to device
-        self.model = UNetPlusLoc(in_channels=5, n_classes=4, n_siren=1)
+        self.model = UNet(in_channels=4, n_classes=4).float()
         self.model = self.model.to(self.device) 
 
         # check and load model checkpoint if resume == True 
@@ -58,8 +58,8 @@ class Trainer(object):
             # change model weights to checkpoint state
             self.model.load_state_dict(checkpoint['model_state_dict'])
         
-        self.norm_mean = torch.tensor(args.norm_mean).float().to(self.device)
-        self.norm_std = torch.tensor(args.norm_std).float().to(self.device)
+        #self.norm_mean = torch.tensor(args.norm_mean).float().to(self.device)
+        #self.norm_std = torch.tensor(args.norm_std).float().to(self.device)
         # transformations 
         self.train_transforms = A.Compose([
             A.Normalize(mean=[88.26, 83.83, 75.40, 57.39], std=[38.06, 31.84, 28.87, 24.43]),
@@ -168,18 +168,19 @@ class Trainer(object):
 
         mean_cl_loss = 0.0 
         segm_loss = 0.0 
+        total_loss = 0.0
         loss_cl_per_class = [] 
 
         # num_iters already given in the dataset 
         # len trainloader = num_iters 
-        for batch_idx, (img_stacks, targets, coords) in enumerate(pbar_train):
+        for batch_idx, (img_stacks, targets, _) in enumerate(pbar_train):
             
             self.model.train() 
 
             # move data to device 
             inputs = img_stacks.to(self.device)
             targets = targets.long().to(self.device)
-            coords = coords.to(self.device)
+            #coords = coords.to(self.device)
 
 
             # forward pass
@@ -204,22 +205,25 @@ class Trainer(object):
             # metrics update and logging
             self.train_iou_classes.update(torch.argmax(outputs, dim=1), targets)
             self.train_iou_all.update(torch.argmax(outputs, dim=1), targets)
+            
+            
             loss_cl_per_class.append(loss_cl_per_class_batch)
-
             mean_cl_loss += mean_cl_loss
             segm_loss += segm_loss
+            total_loss += total_loss.item()
+
             #class_ious = self.train_iou_classes.compute()
             #total_iou = self.train_iou_all.compute().item()
             
 
             # update progress bar 
-            if (self.iter % 50) == 0: 
+            if (self.iter % 558) == 0: 
 
                 total_iou = self.train_iou_all.compute().item()
                 class_ious = self.train_iou_classes.compute()
-                total_loss = total_loss / 50
-                mean_cl_loss = mean_cl_loss / 50
-                segm_loss = segm_loss / 50
+                total_loss = total_loss / 558
+                mean_cl_loss = mean_cl_loss / 558
+                segm_loss = segm_loss / 558
 
                 loss_cl_per_class = np.array(loss_cl_per_class).mean(axis=0)
 
@@ -258,13 +262,14 @@ class Trainer(object):
 
                 mean_cl_loss = 0.0
                 segm_loss = 0.0
+                total_loss = 0.0
                 loss_cl_per_class = []
 
                 # reset metrics for next 10 iterations
                 self.train_iou_classes.reset()
                 self.train_iou_all.reset()
 
-                if (self.iter % 1000) == 0: 
+                if (self.iter % 1116) == 0: 
 
                     self.model.eval()
 
@@ -343,14 +348,14 @@ class Trainer(object):
 
         with torch.no_grad():
             # here all images usd (no max_iters)
-            for batch_idx, (img_stacks, targets, coords) in enumerate(pbar_val):
+            for batch_idx, (img_stacks, targets, _) in enumerate(pbar_val):
                 # move data to device 
                 inputs = img_stacks.to(self.device)
                 targets = targets.long().to(self.device)
-                coords = coords.to(self.device)
+                #coords = coords.to(self.device)
 
                 # forward pass
-                outputs = self.model(inputs, coords)
+                outputs = self.model(inputs)
 
                 # update step 
                 # calculate losses 

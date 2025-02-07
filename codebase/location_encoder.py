@@ -36,11 +36,11 @@ class Siren2d(nn.Module):
         self.output_channels = output_channels
         self.dropout_rate = dropout_rate
 
-        self.initial_conv = nn.Conv2d(self.initial_channels, self.hidden_channels, 3, padding='same')
+        self.initial_conv = nn.Conv2d(self.initial_channels, self.hidden_channels, 1, padding='same')
         self.hidden_convs = nn.ModuleList(
-            [nn.Conv2d(self.hidden_channels, self.hidden_channels, 3, padding='same') for _ in range(self.n_passes - 1)]
+            [nn.Conv2d(self.hidden_channels, self.hidden_channels, 1, padding='same') for _ in range(self.n_passes - 1)]
             )
-        self.final_conv = nn.Conv2d(self.hidden_channels, self.output_channels, 3, padding='same')
+        self.final_conv = nn.Conv2d(self.hidden_channels, self.output_channels, 1, padding='same')
         self.dropout = nn.Dropout(self.dropout_rate)
 
         self.float()
@@ -58,14 +58,39 @@ class Siren2d(nn.Module):
         x = self.final_conv(x)
         return x
 
+class Siren1d(nn.Module):
+    def __init__(
+        self,
+        dropout_rate=0.1,
+        n=1,
+        in_features=4,
+        hidden_features=16,
+        output_features=1
+    ):
+        super(Siren1d, self).__init__()
 
-class LocationEncoder(nn.Module):
-    def __init__(self, dropout_rate, out_channels=1, n_sirens=1):
-        super(LocationEncoder, self).__init__()
-        self.encoder = wrap_encoder()
-        self.siren = Siren2d(n=n_sirens, dropout_rate=dropout_rate, output_channels=out_channels)
+        self.n_passes = n
+        self.initial_features = in_features
+        self.hidden_features = hidden_features
+        self.output_features = output_features
+        self.dropout_rate = dropout_rate
 
+        self.initial_linear = nn.Linear(self.initial_features, self.hidden_features)
+        self.hidden_linears = nn.ModuleList(
+            [nn.Linear(self.hidden_features, self.hidden_features) for _ in range(self.n_passes - 1)]
+        )
+        self.final_linear = nn.Linear(self.hidden_features, self.output_features)
+        self.dropout = nn.Dropout(self.dropout_rate)
+    
     def forward(self, x):
-        x = self.encoder(x)
-        x = self.siren(x)
+        x = self.initial_linear(x)
+        x = self.dropout(x)
+        x = torch.sin(x)
+        
+        for linear in self.hidden_linears:
+            x = linear(x)
+            x = self.dropout(x)
+            x = torch.sin(x)
+        
+        x = self.final_linear(x)
         return x

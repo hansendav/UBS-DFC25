@@ -4,16 +4,16 @@ import torch.nn.functional as F
 import sys 
 
 sys.path.append('/home/gentleprotector/ubs_ws24/UBS-DFC25/codebase')
-from location_encoder import wrap_encoder, Siren2d
+from location_encoder import wrap_encoder, Siren2d, Siren1d
 
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(DoubleConv, self).__init__()
         self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, dtype=torch.float64),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, dtype=torch.float64, bias=False),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, dtype=torch.float64),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, dtype=torch.float64, bias=False),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)
         )
@@ -83,7 +83,6 @@ class UNet(nn.Module):
         self.down1 = DownBlock(in_channels=64, out_channels=128)
         self.down2 = DownBlock(in_channels=128, out_channels=256)
         self.down3 = DownBlock(in_channels=256, out_channels=512)
-
         self.down4 = DownBlock(in_channels=512, out_channels=1024)
         self.up1 = UpBlock(in_channels=1024, out_channels=512)
         self.up2 = UpBlock(in_channels=512, out_channels=256)
@@ -131,14 +130,24 @@ class UNetPlusLoc(nn.Module):
         self.outc = OutConv(64, n_classes)
 
         self.pe = wrap_encoder()
-        self.pos_nn = Siren2d()
+        self.pos_nn = Siren1d()
 
         self.float()
 
     def forward(self, img_stack, coords): 
+        
+        # positional encoding
         pe = self.pe(coords)
-        pos_nn = self.pos_nn(pe)
-        x = img_stack * pos_nn # scale input image by positional encoding
+        pos_nn_en = self.pos_nn(pe)
+        
+        # expand the positional encoding to match the input image size
+        pos_nn_en = pos_nn_en.unsqueeze(2).unsqueeze(3).expand(-1, -1, img_stack.shape[2], img_stack.shape[3])
+
+        # concatenate the positional encoding with the input image
+        # could be also addition or multiplication?
+        x = torch.cat((img_stack, pos_nn_en), dim=1) # concatenate input image with positional encoding along the channel dimension
+
+        # unet forward pass
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
@@ -149,4 +158,5 @@ class UNetPlusLoc(nn.Module):
         x = self.up3(x, x2)
         x = self.up4(x, x1)
         logits = self.outc(x)
+        
         return logits

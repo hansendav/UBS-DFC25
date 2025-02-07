@@ -61,7 +61,7 @@ class DFC25_TRAIN(Dataset):
         
         mask = self.loader(os.path.join(self.dataset_path, 'target', self.dataset_list[idx] + '_building_damage' + self.suffix))
 
-        coords = retreive_xy(os.path.join(self.dataset_path, 'post-event', self.dataset_list[idx] + '_post_disaster' + self.suffix))
+        coords = np.load(os.path.join(self.dataset_path, 'post-event-coords', self.dataset_list[idx] + '_post_disaster.npy'))
         coords = coords.transpose(1, 2, 0)
 
         if self.transforms: 
@@ -88,6 +88,9 @@ class DFC25_VAL(Dataset):
         with open(dataset_file, 'r') as f:
             self.dataset_list = [name.strip() for name in f]
 
+        self.dataset_list = np.random.choice(self.dataset_list, size=int(len(self.dataset_list) * 0.1), replace=False)
+
+
         if max_iters is not None:
             # get multiples of the dataset 
             self.dataset_list = self.dataset_list * int(np.ceil(float(self.max_iters) / len(self.dataset_list)))
@@ -109,7 +112,7 @@ class DFC25_VAL(Dataset):
         
         mask = self.loader(os.path.join(self.dataset_path, 'target', self.dataset_list[idx] + '_building_damage' + self.suffix))
         
-        coords = retreive_xy(os.path.join(self.dataset_path, 'post-event', self.dataset_list[idx] + '_post_disaster' + self.suffix))
+        coords = np.load(os.path.join(self.dataset_path, 'post-event-coords', self.dataset_list[idx] + '_post_disaster.npy'))
         coords = coords.transpose(1, 2, 0)
 
         if self.transforms: 
